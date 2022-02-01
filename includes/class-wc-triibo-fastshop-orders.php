@@ -106,15 +106,15 @@ class WC_Triibo_Fastshop_Orders
     /**
      * Register log
      *
-     * @param array $data
+     * @param array|null $data
      * @param string $type
      * @return void
      */
-    private function log( array $data, string $type = "info" )
+    private function log( $data = ["null"], $type = "info" )
     {
-        $logger   = wc_get_logger();
-        $context  = [ "source" => "fastshop-integration" ];
-        $message  = json_encode( $data );
+        $logger  = wc_get_logger();
+        $context = [ "source" => "fastshop-integration" ];
+        $message = json_encode( $data );
 
         $logger->log( $type, $message, $context );
     }
