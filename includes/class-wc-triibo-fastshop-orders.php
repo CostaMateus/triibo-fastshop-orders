@@ -101,6 +101,14 @@ class WC_Triibo_Fastshop_Orders
             $partial_url    .= "/orderapproved/$this->order_id";
             $this->final_url = $partial_url;
         }
+
+        // pedido processando ou concluído
+        else if ( ( $this->old_status == "processing" || $this->old_status == "completed" )
+                    && $this->new_status == "cancelled" )
+        {
+            $partial_url    .= "/ordercancelation/$this->order_id";
+            $this->final_url = $partial_url;
+        }
     }
 
     /**
