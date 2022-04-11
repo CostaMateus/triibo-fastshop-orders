@@ -81,30 +81,33 @@ class WC_Triibo_Fastshop_Orders
         $partial_url = ($this->_local_env) ? $this->_api_url_hml : $this->_api_url;
         $partial_url .= "/api/marketplace/wc";
 
-        // novo pedido
+        // pendente ----> aguardando
+        // pedido é CRIADO na Fast Shop
         if ( $this->old_status == "pending" && $this->new_status == "on-hold" )
         {
             $partial_url    .= "/ordercreation/$this->order_id";
             $this->final_url = $partial_url;
         }
 
-        // pedido cancelado
-        else if ( $this->old_status == "on-hold" && $this->new_status == "cancelled" )
+        // aguardando || malsucedido ----> cancelado
+        // pedido é CANCELADO na Fast Shop
+        else if ( ( $this->old_status == "on-hold"    || $this->old_status == "failed"   ) && $this->new_status == "cancelled" )
         {
             $partial_url    .= "/ordercancelation/$this->order_id";
             $this->final_url = $partial_url;
         }
 
-        // pagamente efetuado e aprovado
-        else if ( $this->old_status == "on-hold" && $this->new_status == "processing" )
+        // aguardando || malsucedido ----> processando
+        // pedido é APROVADO na Fast Shop
+        else if ( ( $this->old_status == "on-hold"    || $this->old_status == "failed"   ) && $this->new_status == "processing" )
         {
             $partial_url    .= "/orderapproved/$this->order_id";
             $this->final_url = $partial_url;
         }
 
+        // processando || concluido ----> cancelado
         // pedido processando ou concluído
-        else if ( ( $this->old_status == "processing" || $this->old_status == "completed" )
-                    && $this->new_status == "cancelled" )
+        else if ( ( $this->old_status == "processing" || $this->old_status == "completed" ) && $this->new_status == "cancelled" )
         {
             $partial_url    .= "/ordercancelation/$this->order_id";
             $this->final_url = $partial_url;
