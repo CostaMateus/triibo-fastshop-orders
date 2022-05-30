@@ -72,11 +72,11 @@ class WC_Triibo_Fastshop_Orders
 	 */
 	private function process_order()
     {
-        $this->log([
-            "order_id"   => $this->order_id,
-            "old_status" => $this->old_status,
-            "new_status" => $this->new_status,
-        ]);
+        // $this->log([
+        //     "order_id"   => $this->order_id,
+        //     "old_status" => $this->old_status,
+        //     "new_status" => $this->new_status,
+        // ]);
 
         $partial_url = ($this->_local_env) ? $this->_api_url_hml : $this->_api_url;
         $partial_url .= "/api/marketplace/wc";
