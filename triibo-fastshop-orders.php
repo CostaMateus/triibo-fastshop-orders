@@ -4,7 +4,7 @@
  * Description:          Notifica a integração quando ocorre alteração no status de um pedido
  * Author:               Mateus Costa
  * Author URI:           https://costamateus.com.br/
- * Version:              1.1.2
+ * Version:              1.1.3
  * Text Domain:          triibo-fastshop-orders
  * WC requires at least: 3.6
  * WC tested up to:      5.8
