@@ -4,7 +4,7 @@
  * Description:          Notifica a integração quando ocorre alteração no status de um pedido
  * Author:               Mateus Costa
  * Author URI:           https://costamateus.com.br/
- * Version:              1.1.3
+ * Version:              1.1.4
  * Text Domain:          triibo-fastshop-orders
  * WC requires at least: 3.6
  * WC tested up to:      5.8
@@ -19,8 +19,21 @@ include_once dirname( __FILE__ ) . "/includes/class-wc-triibo-fastshop-orders.ph
 add_action( "woocommerce_order_status_changed","triibo_order_status_change", 10, 3 );
 function triibo_order_status_change( $order_id, $old_status, $new_status )
 {
-	$api = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, $new_status );
-	$api->sendNotification();
+	// pendente ----> processando
+	// pedido é CRIADO e na sequencia APROVADO na Fast Shop
+	if ( $old_status == "pending" && $new_status == "processing" )
+	{
+		$api1 = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, "on-hold" );
+		$api1->sendNotification();
+
+		$api2 = new WC_Triibo_Fastshop_Orders( $order_id, "on-hold", $new_status );
+		$api2->sendNotification();
+	}
+	else
+	{
+		$api = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, $new_status );
+		$api->sendNotification();
+	}
 }
 
 add_filter( "woocommerce_rest_suppress_image_upload_error", "triibo_wrsiu_error", 10, 4 );
