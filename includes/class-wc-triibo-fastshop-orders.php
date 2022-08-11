@@ -15,23 +15,24 @@ if ( ! defined( "ABSPATH" ) ) exit;
  */
 class WC_Triibo_Fastshop_Orders
 {
-    private $_local_env     = true;
+    const _local_env     = false;
 
-    private $_api_url_hml   = "http://php-hml.triibo.com.br";           // HOMOLOG
-    private $_api_key_hml   = "fastshopappkey-triibo-AQPPTC";           // HOMOLOG
-    private $_api_token_hml = "7472216240776562417070486d4c6170693139"; // HOMOLOG
+    const _api_url_hml   = "http://php-hml.triibo.com.br";           // HOMOLOG
+    const _api_key_hml   = "fastshopappkey-triibo-AQPPTC";           // HOMOLOG
+    const _api_token_hml = "7472216240776562417070486d4c6170693139"; // HOMOLOG
 
-    private $_api_url       = "http://php.triibo.com.br";               // PROD
-    private $_api_key       = "fastshopappkey-triibo-AQPPTC";           // PROD
-    private $_api_token     = "50083473200638420676844774754275516748"; // PROD
+    const _api_url       = "http://php.triibo.com.br";               // PROD
+    const _api_key       = "fastshopappkey-triibo-AQPPTC";           // PROD
+    const _api_token     = "50083473200638420676844774754275516748"; // PROD
 
-    private $header         = null;
-    private $final_url      = null;
+    private $header      = null;
+    private $final_url   = null;
 
-    private $order_id       = null;
-    private $old_status     = null;
-    private $new_status     = null;
+    private $order_id    = null;
+    private $old_status  = null;
+    private $new_status  = null;
 
+    private $url         = null;
 	/**
 	 * Initialize webservice.
 	 *
@@ -39,30 +40,30 @@ class WC_Triibo_Fastshop_Orders
 	 */
 	public function __construct( $order_id, $old_status, $new_status )
     {
+        $key              = ( self::_local_env ) ? self::_api_key_hml   : self::_api_key;
+        $token            = ( self::_local_env ) ? self::_api_token_hml : self::_api_token;
+        $this->url        = ( self::_local_env ) ? self::_api_url_hml   : self::_api_url;
+
 		$this->order_id   = $order_id;
 		$this->old_status = $old_status;
 		$this->new_status = $new_status;
 
-        $this->get_headers();
-        $this->process_order();
-	}
-
-    /**
-     * Headers request
-     *
-     * @return array
-     */
-    private function get_headers()
-    {
-        $key   = ($this->_local_env) ? $this->_api_key_hml   : $this->_api_key;
-        $token = ($this->_local_env) ? $this->_api_token_hml : $this->_api_token;
-
-        $this->header = [
+        $this->header     = [
             "Accept: application/json",
             "Content-Type: application/json",
             "api-key: $key",
             "api-token: $token",
         ];
+
+        $this->process_order();
+	}
+
+    public function set_process( $old_status, $new_status )
+    {
+		$this->old_status = $old_status;
+		$this->new_status = $new_status;
+
+        $this->process_order();
     }
 
 	/**
@@ -72,42 +73,49 @@ class WC_Triibo_Fastshop_Orders
 	 */
 	private function process_order()
     {
-        // $this->log([
-        //     "order_id"   => $this->order_id,
-        //     "old_status" => $this->old_status,
-        //     "new_status" => $this->new_status,
-        // ]);
+        // qlqr_status ( -processando -concluido )  --> aguardando   ==  cria FS
+        // pendente                                 --> malsucedido  ==  cria FS
+        // aguardando || malsucedido                --> processando  ==  aprova FS
+        // qlqr_status ( -pendente )                --> cancelado    ==  cancelo FS
+        // qlqr_status ( -aguardando -malsucedido ) --> processando  ==  cria e aprova FS
 
-        $partial_url = ($this->_local_env) ? $this->_api_url_hml : $this->_api_url;
-        $partial_url .= "/api/marketplace/wc";
+        $partial_url = $this->url . "/api/marketplace/wc";
 
-        // pendente ----> aguardando
-        // pedido é CRIADO na Fast Shop
-        if ( $this->old_status == "pending" && $this->new_status == "on-hold" )
+        /**
+         * qlqr_status ( -processando -concluido ) --> aguardando
+         * pedido é CRIADO na FS
+         */
+        if ( !in_array( $this->old_status, [ "processing", "completed" ] ) && $this->new_status == "on-hold" )
         {
             $partial_url    .= "/ordercreation/$this->order_id";
             $this->final_url = $partial_url;
         }
 
-        // aguardando || malsucedido ----> cancelado
-        // pedido é CANCELADO na Fast Shop
-        else if ( ( $this->old_status == "on-hold"    || $this->old_status == "failed"   ) && $this->new_status == "cancelled" )
+        /**
+         * pendente --> malsucedido
+         * pedido é CRIADO na FS
+         */
+        elseif ( $this->old_status == "pending" && $this->new_status == "failed" )
         {
-            $partial_url    .= "/ordercancelation/$this->order_id";
+            $partial_url    .= "/ordercreation/$this->order_id";
             $this->final_url = $partial_url;
         }
 
-        // aguardando || malsucedido ----> processando
-        // pedido é APROVADO na Fast Shop
-        else if ( ( $this->old_status == "on-hold"    || $this->old_status == "failed"   ) && $this->new_status == "processing" )
+        /**
+         * aguardando || malsucedido --> processando
+         * pedido é APROVADO na FS
+         */
+        elseif ( in_array( $this->old_status, [ "on-hold", "failed" ] ) && $this->new_status == "processing" )
         {
             $partial_url    .= "/orderapproved/$this->order_id";
             $this->final_url = $partial_url;
         }
 
-        // processando || concluido ----> cancelado
-        // pedido processando ou concluído
-        else if ( ( $this->old_status == "processing" || $this->old_status == "completed" ) && $this->new_status == "cancelled" )
+        /**
+         * qlqr_status ( -pendente ) --> cancelado
+         * pedido é CANCELADO na FS
+         */
+        elseif ( $this->old_status != "pending" && $this->new_status == "cancelled" )
         {
             $partial_url    .= "/ordercancelation/$this->order_id";
             $this->final_url = $partial_url;
@@ -121,7 +129,7 @@ class WC_Triibo_Fastshop_Orders
      * @param string $type
      * @return void
      */
-    private function log( $data = ["null"], $type = "info" )
+    private function log( $data = [ "null" ], $type = "info" )
     {
         $logger  = wc_get_logger();
         $context = [ "source" => "fastshop-integration" ];
@@ -132,7 +140,7 @@ class WC_Triibo_Fastshop_Orders
 
     public function sendNotification()
     {
-        if (!$this->final_url) return;
+        if ( !$this->final_url ) return;
 
         $ch  = curl_init();
 
@@ -143,8 +151,6 @@ class WC_Triibo_Fastshop_Orders
 			CURLOPT_MAXREDIRS      => 10,
 			CURLOPT_TIMEOUT        => 30,
             CURLOPT_FOLLOWLOCATION => true,
-			// CURLOPT_SSL_VERIFYHOST => FALSE,
-			// CURLOPT_SSL_VERIFYPEER => FALSE,
 			CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
 			CURLOPT_CUSTOMREQUEST  => "POST",
 			CURLOPT_HTTPHEADER     => $this->header,
@@ -156,7 +162,7 @@ class WC_Triibo_Fastshop_Orders
 
         $response = json_decode( $response, TRUE );
 
-        $this->log($response);
+        $this->log( $response );
 
         return $response;
     }

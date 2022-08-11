@@ -19,15 +19,17 @@ include_once dirname( __FILE__ ) . "/includes/class-wc-triibo-fastshop-orders.ph
 add_action( "woocommerce_order_status_changed","triibo_order_status_change", 10, 3 );
 function triibo_order_status_change( $order_id, $old_status, $new_status )
 {
-	// pendente ----> processando
-	// pedido é CRIADO e na sequencia APROVADO na Fast Shop
-	if ( $old_status == "pending" && $new_status == "processing" )
+	/**
+	 * qlqr_status ( -aguardando - malsucedido) --> processando
+	 * pedido é CRIADO e na sequencia APROVADO na FS
+	 */
+	if ( !in_array( $old_status, [ "on-hold", "failed" ] ) && $new_status == "processing" )
 	{
-		$api1 = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, "on-hold" );
-		$api1->sendNotification();
+		$api = new WC_Triibo_Fastshop_Orders( $order_id, "pending", "on-hold");
+		$api->sendNotification(); // CRIA
 
-		$api2 = new WC_Triibo_Fastshop_Orders( $order_id, "on-hold", $new_status );
-		$api2->sendNotification();
+		$api->set_process( "on-hold", "processing" );
+		$api->sendNotification(); // APROVA
 	}
 	else
 	{
