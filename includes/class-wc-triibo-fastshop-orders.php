@@ -15,8 +15,6 @@ if ( ! defined( "ABSPATH" ) ) exit;
  */
 class WC_Triibo_Fastshop_Orders
 {
-    const _local_env     = false;
-
     const _api_url_hml   = "http://php-hml.triibo.com.br";           // HOMOLOG
     const _api_key_hml   = "fastshopappkey-triibo-AQPPTC";           // HOMOLOG
     const _api_token_hml = "7472216240776562417070486d4c6170693139"; // HOMOLOG
@@ -40,9 +38,11 @@ class WC_Triibo_Fastshop_Orders
 	 */
 	public function __construct( $order_id, $old_status, $new_status )
     {
-        $key              = ( self::_local_env ) ? self::_api_key_hml   : self::_api_key;
-        $token            = ( self::_local_env ) ? self::_api_token_hml : self::_api_token;
-        $this->url        = ( self::_local_env ) ? self::_api_url_hml   : self::_api_url;
+        $_local_env       = ( strpos( home_url(), "dev-" ) !== FALSE ) ? true : false;
+
+        $key              = $_local_env ? self::_api_key_hml   : self::_api_key;
+        $token            = $_local_env ? self::_api_token_hml : self::_api_token;
+        $this->url        = $_local_env ? self::_api_url_hml   : self::_api_url;
 
 		$this->order_id   = $order_id;
 		$this->old_status = $old_status;
