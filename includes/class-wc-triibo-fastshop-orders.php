@@ -170,4 +170,281 @@ class WC_Triibo_Fastshop_Orders
 
         return $response;
     }
+
+    public function maybe_split_orders( $parent_order_id, $parent_order )
+    {
+        $this->log( sprintf( 'TRIIBO: New Order #%d created. Init sub order.', $parent_order_id ) );
+
+        if ( $parent_order->get_meta( "has_sub_order" ) == true )
+        {
+            $args = [
+                "post_parent" => $parent_order_id,
+                "post_type"   => "shop_order",
+                "numberposts" => -1,
+                "post_status" => "any",
+            ];
+
+            $child_orders = get_children( $args );
+
+            foreach ( $child_orders as $child ) wp_delete_post( $child->ID, true );
+        }
+
+        $hubs        = [];
+        $seller_id   = null;
+        $order_items = $parent_order->get_items();
+
+        foreach ( $order_items as $item )
+        {
+            $product = $item->get_product();
+            $hub     = $product->get_shipping_class();
+
+            if ( strpos( $hub, "fast-shop-" ) !== false )
+            {
+                $seller_id      = get_post_field( "post_author", $item[ "product_id" ] );
+                $hubs[ $hub ][] = $item;
+            }
+        }
+
+        if ( count( $hubs ) <= 1 )
+        {
+            $this->log( "TRIIBO: 1 hub only, skipping sub order" );
+            return;
+        }
+
+        update_post_meta( $parent_order_id, "has_sub_order", "yes" );
+
+        $this->log( sprintf( "TRIIBO: Got %s hubs, starting sub order", count( $hubs ) ) );
+
+        foreach ( $hubs as $hub => $hub_products )
+        {
+            $this->create_sub_order( $parent_order, $seller_id, $hub, $hub_products );
+        }
+    }
+
+    private function create_sub_order( $parent_order, $seller_id, $hub, $hub_products )
+    {
+        $this->log( "TRIIBO: Creating sub order for hub: " . $hub );
+
+        $bill_ship = [
+            "billing_country",
+            "billing_first_name",
+            "billing_last_name",
+            "billing_company",
+            "billing_address_1",
+            "billing_address_2",
+            "billing_city",
+            "billing_state",
+            "billing_postcode",
+            "billing_email",
+            "billing_phone",
+            "shipping_country",
+            "shipping_first_name",
+            "shipping_last_name",
+            "shipping_company",
+            "shipping_address_1",
+            "shipping_address_2",
+            "shipping_city",
+            "shipping_state",
+            "shipping_postcode",
+        ];
+
+        try
+        {
+            $order = new \WC_Order();
+
+            // save billing and shipping address
+            foreach ( $bill_ship as $key )
+                if ( is_callable( [ $order, "set_{$key}" ] ) )
+                    $order->{ "set_{$key}" }( $parent_order->{"get_{$key}"}() );
+
+            // now insert line items
+            $this->create_line_items( $order, $hub_products );
+
+            // do shipping
+            $this->create_shipping( $order, $parent_order );
+
+            // do tax
+            $this->create_taxes( $order, $parent_order, $hub_products );
+
+            // add coupons if any
+            $this->create_coupons( $order, $parent_order, $hub_products );
+
+            // save other details
+            $order->set_created_via( "triibo-fastshop-orders" );
+            $order->set_cart_hash( $parent_order->get_cart_hash() );
+            $order->set_customer_id( $parent_order->get_customer_id() );
+            $order->set_currency( $parent_order->get_currency() );
+            $order->set_prices_include_tax( $parent_order->get_prices_include_tax() );
+            $order->set_customer_ip_address( $parent_order->get_customer_ip_address() );
+            $order->set_customer_user_agent( $parent_order->get_customer_user_agent() );
+            $order->set_customer_note( $parent_order->get_customer_note() );
+            $order->set_payment_method( $parent_order->get_payment_method() );
+            $order->set_payment_method_title( $parent_order->get_payment_method_title() );
+            $order->update_meta_data( "_dokan_vendor_id", $seller_id );
+
+            do_action( "dokan_create_sub_order_before_calculate_totals", $order, $parent_order, $hub_products );
+
+            // finally, let the order re-calculate itself and save
+            $order->calculate_totals();
+
+            $order->set_status( $parent_order->get_status() );
+            $order->set_parent_id( $parent_order->get_id() );
+
+            $order_id = $order->save();
+
+            $this->log( "TRIIBO: Created sub order : #" . $order_id );
+
+            // update total_sales count for sub-order
+            wc_update_total_sales_counts( $order_id );
+        }
+        catch ( Exception $e )
+        {
+            return new WP_Error( "dokan-suborder-error", $e->getMessage() );
+        }
+    }
+
+    private function create_line_items( $order, $products )
+    {
+        foreach ( $products as $item )
+        {
+            $product_item = new \WC_Order_Item_Product();
+
+            $product_item->set_name         ( $item->get_name()         );
+            $product_item->set_product_id   ( $item->get_product_id()   );
+            $product_item->set_variation_id ( $item->get_variation_id() );
+            $product_item->set_quantity     ( $item->get_quantity()     );
+            $product_item->set_tax_class    ( $item->get_tax_class()    );
+            $product_item->set_subtotal     ( $item->get_subtotal()     );
+            $product_item->set_subtotal_tax ( $item->get_subtotal_tax() );
+            $product_item->set_total_tax    ( $item->get_total_tax()    );
+            $product_item->set_total        ( $item->get_total()        );
+            $product_item->set_taxes        ( $item->get_taxes()        );
+
+            $metadata = $item->get_meta_data();
+
+            if ( $metadata )
+                foreach ( $metadata as $meta )
+                    $product_item->add_meta_data( $meta->key, $meta->value );
+
+            $order->add_item( $product_item );
+        }
+
+        $order->save();
+    }
+
+    private function create_shipping( $order, $parent_order )
+    {
+        $shipping_methods = $parent_order->get_shipping_methods();
+        $order_seller_id  = dokan_get_seller_id_by_order( $order->get_id() );
+
+        $applied_shipping_method = "";
+
+        if ( $shipping_methods )
+        {
+            foreach ( $shipping_methods as $method_item_id => $shipping_object )
+            {
+                $shipping_seller_id = wc_get_order_item_meta( $method_item_id, "seller_id", true );
+
+                if ( $order_seller_id == $shipping_seller_id )
+                {
+                    $applied_shipping_method = $shipping_object;
+                    break;
+                }
+            }
+        }
+
+        $shipping_method = apply_filters( "dokan_shipping_method", $applied_shipping_method, $order->get_id(), $parent_order );
+
+        if ( is_a( $shipping_method, "WC_Order_Item_Shipping" ) )
+        {
+            $item = new \WC_Order_Item_Shipping();
+
+            $item->set_props( [
+                "method_title" => $shipping_method->get_name(),
+                "method_id"    => $shipping_method->get_method_id(),
+                "total"        => $shipping_method->get_total(),
+                "taxes"        => $shipping_method->get_taxes(),
+            ] );
+
+            $metadata = $shipping_method->get_meta_data();
+
+            if ( $metadata )
+                foreach ( $metadata as $meta )
+                    $item->add_meta_data( $meta->key, $meta->value );
+
+            $order->add_item( $item );
+            $order->set_shipping_total( $shipping_method->get_total() );
+            $order->save();
+        }
+    }
+
+    private function create_taxes( $order, $parent_order, $products )
+    {
+        $shipping  = $order->get_items( "shipping" );
+        $tax_total = 0;
+
+        foreach ( $products as $item )
+            $tax_total += $item->get_total_tax();
+
+        foreach ( $parent_order->get_taxes() as $tax )
+        {
+            $seller_shipping = reset( $shipping );
+
+            $item = new \WC_Order_Item_Tax();
+            $item->set_props( [
+                "rate_id"            => $tax->get_rate_id(),
+                "label"              => $tax->get_label(),
+                "compound"           => $tax->get_compound(),
+                "rate_code"          => \WC_Tax::get_rate_code( $tax->get_rate_id() ),
+                "tax_total"          => $tax_total,
+                "shipping_tax_total" => is_bool( $seller_shipping ) ? "" : $seller_shipping->get_total_tax(),
+            ] );
+
+            $order->add_item( $item );
+        }
+
+        $order->save();
+    }
+
+    private function create_coupons( $order, $parent_order, $products )
+    {
+        $used_coupons = $parent_order->get_items( "coupon" );
+        $product_ids  = array_map(
+            function( $item ) {
+                return $item->get_product_id();
+            }, $products
+        );
+
+        if ( !$used_coupons ) return;
+
+        $seller_id = dokan_get_seller_id_by_order( $order->get_id() );
+
+        if ( !$seller_id ) return;
+
+        foreach ( $used_coupons as $item )
+        {
+            $coupon = new \WC_Coupon( $item->get_code() );
+
+            if (
+                $coupon &&
+                !is_wp_error( $coupon ) &&
+                ( array_intersect( $product_ids, $coupon->get_product_ids() ) ||
+                    apply_filters( "dokan_is_order_have_admin_coupon", false, $coupon, [ $seller_id ], $product_ids )
+                )
+            ) {
+                $new_item = new \WC_Order_Item_Coupon();
+                $new_item->set_props( [
+                    "code"         => $item->get_code(),
+                    "discount"     => $item->get_discount(),
+                    "discount_tax" => $item->get_discount_tax(),
+                ] );
+
+                $new_item->add_meta_data( "coupon_data", $coupon->get_data() );
+
+                $order->add_item( $new_item );
+            }
+        }
+
+        $order->save();
+    }
 }
