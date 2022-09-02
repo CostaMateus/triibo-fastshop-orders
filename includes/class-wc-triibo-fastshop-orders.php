@@ -31,31 +31,35 @@ class WC_Triibo_Fastshop_Orders
     private $new_status  = null;
 
     private $url         = null;
+
 	/**
 	 * Initialize webservice.
 	 *
 	 * @param array $package Shipping package.
 	 */
-	public function __construct( $order_id, $old_status, $new_status )
+	public function __construct( $order_id = null, $old_status = null, $new_status = null )
     {
-        $_local_env       = ( strpos( home_url(), "dev-" ) !== FALSE ) ? true : false;
+        if ( $order_id && $old_status && $new_status )
+        {
+            $_local_env       = ( strpos( home_url(), "dev-" ) !== FALSE ) ? true : false;
 
-        $key              = $_local_env ? self::_api_key_hml   : self::_api_key;
-        $token            = $_local_env ? self::_api_token_hml : self::_api_token;
-        $this->url        = $_local_env ? self::_api_url_hml   : self::_api_url;
+            $key              = $_local_env ? self::_api_key_hml   : self::_api_key;
+            $token            = $_local_env ? self::_api_token_hml : self::_api_token;
+            $this->url        = $_local_env ? self::_api_url_hml   : self::_api_url;
 
-		$this->order_id   = $order_id;
-		$this->old_status = $old_status;
-		$this->new_status = $new_status;
+            $this->order_id   = $order_id;
+            $this->old_status = $old_status;
+            $this->new_status = $new_status;
 
-        $this->header     = [
-            "Accept: application/json",
-            "Content-Type: application/json",
-            "api-key: $key",
-            "api-token: $token",
-        ];
+            $this->header     = [
+                "Accept: application/json",
+                "Content-Type: application/json",
+                "api-key: $key",
+                "api-token: $token",
+            ];
 
-        $this->process_order();
+            $this->process_order();
+        }
 	}
 
     public function set_process( $old_status, $new_status )
@@ -125,15 +129,15 @@ class WC_Triibo_Fastshop_Orders
     /**
      * Register log
      *
-     * @param array|null $data
+     * @param string|null $data
      * @param string $type
      * @return void
      */
-    private function log( $data = [ "null" ], $type = "info" )
+    public function log( $data = "", $type = "info" )
     {
         $logger  = wc_get_logger();
         $context = [ "source" => "fastshop-integration" ];
-        $message = json_encode( $data );
+        $message = $data;
 
         $logger->log( $type, $message, $context );
     }
@@ -162,7 +166,7 @@ class WC_Triibo_Fastshop_Orders
 
         $response = json_decode( $response, TRUE );
 
-        $this->log( $response );
+        $this->log( json_encode( $response ) );
 
         return $response;
     }
