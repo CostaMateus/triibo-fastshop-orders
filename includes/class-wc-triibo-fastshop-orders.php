@@ -135,11 +135,8 @@ class WC_Triibo_Fastshop_Orders
      */
     public function log( $data = "", $type = "info" )
     {
-        $logger  = wc_get_logger();
-        $context = [ "source" => "fastshop-integration" ];
-        $message = $data;
-
-        $logger->log( $type, $message, $context );
+        $log = ( function_exists( "wc_get_logger" ) ) ? wc_get_logger() : new WC_Logger();
+        $log->add( "fastshop_orders", $data );
     }
 
     public function sendNotification()
