@@ -170,7 +170,7 @@ class WC_Triibo_Fastshop_Orders
 
     public function maybe_split_orders( $parent_order_id, $parent_order )
     {
-        $this->log( sprintf( 'TRIIBO: New Order #%d created. Init sub order.', $parent_order_id ) );
+        $this->log( sprintf( "TRIIBO: New Order #%d created. Init sub order.", $parent_order_id ) );
 
         if ( $parent_order->get_meta( "has_sub_order" ) == true )
         {
@@ -208,7 +208,8 @@ class WC_Triibo_Fastshop_Orders
             return;
         }
 
-        update_post_meta( $parent_order_id, "has_sub_order", "yes" );
+        $parent_order->update_meta_data( "has_sub_order", true );
+        $parent_order->save();
 
         $this->log( sprintf( "TRIIBO: Got %s hubs, starting sub order", count( $hubs ) ) );
 
@@ -279,8 +280,6 @@ class WC_Triibo_Fastshop_Orders
             $order->set_payment_method_title( $parent_order->get_payment_method_title() );
             $order->update_meta_data( "_dokan_vendor_id", $seller_id );
 
-            do_action( "dokan_create_sub_order_before_calculate_totals", $order, $parent_order, $hub_products );
-
             // finally, let the order re-calculate itself and save
             $order->calculate_totals();
 
@@ -317,7 +316,7 @@ class WC_Triibo_Fastshop_Orders
             $product_item->set_total        ( $item->get_total()        );
             $product_item->set_taxes        ( $item->get_taxes()        );
 
-            $metadata = $item->get_meta_data();
+            $metadata     = $item->get_meta_data();
 
             if ( $metadata )
                 foreach ( $metadata as $meta )
