@@ -259,7 +259,7 @@ class WC_Triibo_Fastshop_Orders
             $this->create_line_items( $order, $hub_products );
 
             // do shipping
-            $this->create_shipping( $order, $parent_order );
+            $this->create_shipping( $order, $parent_order, $hub_products );
 
             // do tax
             $this->create_taxes( $order, $parent_order, $hub_products );
@@ -328,49 +328,66 @@ class WC_Triibo_Fastshop_Orders
         $order->save();
     }
 
-    private function create_shipping( $order, $parent_order )
+    private function create_shipping( $order, $parent_order, $products )
     {
-        $shipping_methods = $parent_order->get_shipping_methods();
-        $order_seller_id  = dokan_get_seller_id_by_order( $order->get_id() );
+        $shipping_methods         = $parent_order->get_shipping_methods();
+        $applied_shipping_methods = [];
 
-        $applied_shipping_method = "";
-
-        if ( $shipping_methods )
+        foreach ( $shipping_methods as $shipping_object )
         {
-            foreach ( $shipping_methods as $method_item_id => $shipping_object )
-            {
-                $shipping_seller_id = wc_get_order_item_meta( $method_item_id, "seller_id", true );
+            $meta_data    = $shipping_object->get_data()[ "meta_data" ];
+            $index        = array_search( "price", array_column( $meta_data, "key" ) );
+            $data         = $meta_data[ $index ];
+            $data         = $data->get_data();
 
-                if ( $order_seller_id == $shipping_seller_id )
-                {
-                    $applied_shipping_method = $shipping_object;
-                    break;
-                }
+            $arr_products = [];
+
+            foreach ( $products as $product )
+            {
+                $product_id     = $product->get_product_id();
+                $arr_products[] = ( isset( $data[ "value" ][ $product_id ] ) ) ? true : false;
+            }
+
+            if ( !in_array( false, $arr_products ) )
+            {
+                $applied_shipping_methods[] = $shipping_object;
+                break;
             }
         }
 
-        $shipping_method = apply_filters( "dokan_shipping_method", $applied_shipping_method, $order->get_id(), $parent_order );
+        // $shipping_methods = apply_filters( "dokan_shipping_method", $applied_shipping_methods, $order->get_id(), $parent_order );
+        $shipping_methods = $applied_shipping_methods;
 
-        if ( is_a( $shipping_method, "WC_Order_Item_Shipping" ) )
+        // bail out if no shipping methods found
+        if ( !$shipping_methods )
         {
-            $item = new \WC_Order_Item_Shipping();
+            $this->log( "TRIIBO: No shipping method found : Aborting : #" . $order->get_id() );
+            return;
+        }
 
-            $item->set_props( [
-                "method_title" => $shipping_method->get_name(),
-                "method_id"    => $shipping_method->get_method_id(),
-                "total"        => $shipping_method->get_total(),
-                "taxes"        => $shipping_method->get_taxes(),
-            ] );
+        foreach ( $shipping_methods as $key => $shipping_method )
+        {
+            if ( is_a( $shipping_method, "WC_Order_Item_Shipping" ) )
+            {
+                $item = new \WC_Order_Item_Shipping();
 
-            $metadata = $shipping_method->get_meta_data();
+                $item->set_props( [
+                    "method_title" => $shipping_method->get_name(),
+                    "method_id"    => $shipping_method->get_method_id(),
+                    "total"        => $shipping_method->get_total(),
+                    "taxes"        => $shipping_method->get_taxes(),
+                ] );
 
-            if ( $metadata )
-                foreach ( $metadata as $meta )
-                    $item->add_meta_data( $meta->key, $meta->value );
+                $metadata = $shipping_method->get_meta_data();
 
-            $order->add_item( $item );
-            $order->set_shipping_total( $shipping_method->get_total() );
-            $order->save();
+                if ( $metadata )
+                    foreach ( $metadata as $meta )
+                        $item->add_meta_data( $meta->key, $meta->value );
+
+                $order->add_item( $item );
+                $order->set_shipping_total( $shipping_method->get_total() );
+                $order->save();
+            }
         }
     }
 
