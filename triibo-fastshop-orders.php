@@ -56,25 +56,48 @@ function triibo_split_order_fastshop( $order_id, $old_status, $new_status, $orde
 	}
 }
 
-add_action( "woocommerce_order_status_changed","triibo_order_status_change", 10, 3 );
-function triibo_order_status_change( $order_id, $old_status, $new_status )
+add_action( "woocommerce_order_status_changed", "triibo_order_status_change", 9, 4 );
+function triibo_order_status_change( $order_id, $old_status, $new_status, $order )
 {
-	/**
-	 * qlqr_status ( -aguardando - malsucedido) --> processando
-	 * pedido é CRIADO e na sequencia APROVADO na FS
-	 */
-	if ( !in_array( $old_status, [ "on-hold", "failed" ] ) && $new_status == "processing" )
-	{
-		$api = new WC_Triibo_Fastshop_Orders( $order_id, "pending", "on-hold");
-		$api->sendNotification(); // CRIA
+	$subOrder = empty( $order->get_meta( "has_sub_order" ) ) ? false : true;
 
-		$api->set_process( "on-hold", "processing" );
-		$api->sendNotification(); // APROVA
-	}
-	else
+	if ( !$subOrder )
 	{
-		$api = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, $new_status );
-		$api->sendNotification();
+		$items = $order->get_items();
+		$hasFS = false;
+
+		foreach ( $items as $item )
+		{
+			$product = $item->get_product();
+			$hub     = $product->get_shipping_class();
+
+			if ( strpos( $hub, "fast-shop" ) !== false )
+			{
+				$hasFS = true;
+				break;
+			}
+		}
+
+		if ( $hasFS )
+		{
+			/**
+			 * qlqr_status ( -aguardando - malsucedido) --> processando
+			 * pedido é CRIADO e na sequencia APROVADO na FS
+			 */
+			if ( !in_array( $old_status, [ "on-hold", "failed" ] ) && $new_status == "processing" )
+			{
+				// $api = new WC_Triibo_Fastshop_Orders( $order_id, "pending", "on-hold");
+				// $api->sendNotification(); // CRIA
+
+				// $api->set_process( "on-hold", "processing" );
+				// $api->sendNotification(); // APROVA
+			}
+			else
+			{
+				// $api = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, $new_status );
+				// $api->sendNotification();
+			}
+		}
 	}
 }
 
