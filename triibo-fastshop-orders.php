@@ -16,6 +16,46 @@ if ( ! defined( "ABSPATH" ) ) exit;
 
 include_once dirname( __FILE__ ) . "/includes/class-wc-triibo-fastshop-orders.php";
 
+add_action( "woocommerce_order_status_changed", "triibo_split_order_fastshop", 7, 4 );
+function triibo_split_order_fastshop( $order_id, $old_status, $new_status, $order )
+{
+	$items      = $order->get_items();
+	$countItems = count( $items );
+	$auxCount   = 0;
+	$hasFS      = false;
+	$onlyFS     = true;
+
+	foreach ( $items as $item )
+	{
+		$product = $item->get_product();
+		$hub     = $product->get_shipping_class();
+
+		if ( strpos( $hub, "fast-shop" ) !== false )
+		{
+			$auxCount++;
+			$hasFS = true;
+		}
+	}
+
+	if ( $auxCount != $countItems ) $onlyFS = false;
+
+	if ( $hasFS && $onlyFS )
+	{
+		if ( $old_status == "pending" )
+		{
+			// Remove the hook to prevent recursive callas.
+			remove_action( "woocommerce_order_status_changed", "triibo_split_order_fastshop", 7 );
+
+			// Split the order.
+			$triibo = new WC_Triibo_Fastshop_Orders();
+			$triibo->maybe_split_orders( $order_id, $order );
+
+			// Add the hook back.
+			add_action( "woocommerce_order_status_changed", "triibo_split_order_fastshop", 7, 4 );
+		}
+	}
+}
+
 add_action( "woocommerce_order_status_changed","triibo_order_status_change", 10, 3 );
 function triibo_order_status_change( $order_id, $old_status, $new_status )
 {
