@@ -4,7 +4,7 @@
  * Description:          Notifica a integração quando ocorre alteração no status de um pedido
  * Author:               Mateus Costa
  * Author URI:           https://costamateus.com.br/
- * Version:              2.0.0
+ * Version:              2.0.1
  * Text Domain:          triibo-fastshop-orders
  * WC requires at least: 3.6
  * WC tested up to:      5.8
@@ -28,6 +28,15 @@ function triibo_split_order_fastshop( $order_id, $old_status, $new_status, $orde
 	foreach ( $items as $item )
 	{
 		$product = $item->get_product();
+
+		if ( class_exists( "WC_Subscriptions_Product" ) &&
+			WC_Subscriptions_Product::is_subscription( $product ) )
+		{
+			$hasFS  = false;
+			$onlyFS = false;
+			break;
+		}
+
 		$hub     = $product->get_shipping_class();
 
 		if ( strpos( $hub, "fast-shop" ) !== false )
