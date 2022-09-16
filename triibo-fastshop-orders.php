@@ -90,21 +90,21 @@ function triibo_order_status_change( $order_id, $old_status, $new_status, $order
 		if ( $hasFS )
 		{
 			/**
-			 * qlqr_status ( -aguardando - malsucedido) --> processando
+			 * qlqr_status ( -aguardando ) --> processando
 			 * pedido é CRIADO e na sequencia APROVADO na FS
 			 */
-			if ( !in_array( $old_status, [ "on-hold", "failed" ] ) && $new_status == "processing" )
+			if ( $old_status != "on-hold" && $new_status == "processing" )
 			{
-				// $api = new WC_Triibo_Fastshop_Orders( $order_id, "pending", "on-hold");
-				// $api->sendNotification(); // CRIA
+				$api = new WC_Triibo_Fastshop_Orders( $order_id, "pending", "on-hold");
+				$api->sendNotification(); // CRIA
 
-				// $api->set_process( "on-hold", "processing" );
-				// $api->sendNotification(); // APROVA
+				$api->set_process( "on-hold", "processing" );
+				$api->sendNotification(); // APROVA
 			}
 			else
 			{
-				// $api = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, $new_status );
-				// $api->sendNotification();
+				$api = new WC_Triibo_Fastshop_Orders( $order_id, $old_status, $new_status );
+				$api->sendNotification();
 			}
 		}
 	}

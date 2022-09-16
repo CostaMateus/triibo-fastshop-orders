@@ -77,11 +77,16 @@ class WC_Triibo_Fastshop_Orders
 	 */
 	private function process_order()
     {
+        // // qlqr_status ( -processando -concluido )  --> aguardando   ==  cria FS
+        // // pendente                                 --> malsucedido  ==  cria FS
+        // // aguardando || malsucedido                --> processando  ==  aprova FS
+        // // qlqr_status ( -pendente )                --> cancelado    ==  cancelo FS
+        // // qlqr_status ( -aguardando -malsucedido ) --> processando  ==  cria e aprova FS
+
         // qlqr_status ( -processando -concluido )  --> aguardando   ==  cria FS
-        // pendente                                 --> malsucedido  ==  cria FS
-        // aguardando || malsucedido                --> processando  ==  aprova FS
+        // aguardando                               --> processando  ==  aprova FS
         // qlqr_status ( -pendente )                --> cancelado    ==  cancelo FS
-        // qlqr_status ( -aguardando -malsucedido ) --> processando  ==  cria e aprova FS
+        // qlqr_status ( -aguardando )              --> processando  ==  cria e aprova FS
 
         $partial_url = $this->url . "/api/marketplace/wc";
 
@@ -96,20 +101,10 @@ class WC_Triibo_Fastshop_Orders
         }
 
         /**
-         * pendente --> malsucedido
-         * pedido é CRIADO na FS
-         */
-        elseif ( $this->old_status == "pending" && $this->new_status == "failed" )
-        {
-            $partial_url    .= "/ordercreation/$this->order_id";
-            $this->final_url = $partial_url;
-        }
-
-        /**
-         * aguardando || malsucedido --> processando
+         * aguardando --> processando
          * pedido é APROVADO na FS
          */
-        elseif ( in_array( $this->old_status, [ "on-hold", "failed" ] ) && $this->new_status == "processing" )
+        elseif ( $this->old_status == "on-hold" && $this->new_status == "processing" )
         {
             $partial_url    .= "/orderapproved/$this->order_id";
             $this->final_url = $partial_url;
