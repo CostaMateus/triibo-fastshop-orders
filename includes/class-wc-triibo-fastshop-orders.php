@@ -328,32 +328,6 @@ class WC_Triibo_Fastshop_Orders
         $shipping_methods         = $parent_order->get_shipping_methods();
         $applied_shipping_methods = [];
 
-        foreach ( $shipping_methods as $shipping_object )
-        {
-            $meta_data    = $shipping_object->get_data()[ "meta_data" ];
-            $index        = array_search( "price", array_column( $meta_data, "key" ) );
-            $data         = $meta_data[ $index ];
-            $data         = $data->get_data();
-
-            $arr_products = [];
-
-            foreach ( $products as $product )
-            {
-                $product_id     = $product->get_product_id();
-                $arr_products[] = ( isset( $data[ "value" ][ $product_id ] ) ) ? true : false;
-            }
-
-            if ( !in_array( false, $arr_products ) )
-            {
-                $applied_shipping_methods[] = $shipping_object;
-                break;
-            }
-        }
-
-        // $shipping_methods = apply_filters( "dokan_shipping_method", $applied_shipping_methods, $order->get_id(), $parent_order );
-        $shipping_methods = $applied_shipping_methods;
-
-        // bail out if no shipping methods found
         if ( !$shipping_methods )
         {
             $this->log( "TRIIBO: No shipping method found : Aborting : #" . $order->get_id() );
@@ -364,20 +338,48 @@ class WC_Triibo_Fastshop_Orders
         {
             if ( is_a( $shipping_method, "WC_Order_Item_Shipping" ) )
             {
-                $item = new \WC_Order_Item_Shipping();
+                $total    = 0;
+
+                $item     = new \WC_Order_Item_Shipping();
+                $metadata = $shipping_method->get_meta_data();
+
+                if ( $metadata )
+                {
+                    foreach ( $metadata as $meta )
+                    {
+                        if ( $meta->key == "price" )
+                        {
+                            $data     = $meta->get_data();
+                            $new_meta = [ "value" => [] ];
+
+                            foreach ( $products as $product )
+                            {
+                                $product_id = $product->get_product_id();
+
+                                if ( isset( $data[ "value" ][ $product_id ] ) )
+                                {
+                                    $value  = $data[ "value" ][ $product_id ];
+                                    $total += $value;
+
+                                    $new_meta[ "value" ][ $product_id ] = $value;
+                                }
+                            }
+
+                            $item->add_meta_data( $meta->key, $new_meta );
+                        }
+                        else
+                        {
+                            $item->add_meta_data( $meta->key, $meta->value );
+                        }
+                    }
+                }
 
                 $item->set_props( [
                     "method_title" => $shipping_method->get_name(),
                     "method_id"    => $shipping_method->get_method_id(),
-                    "total"        => $shipping_method->get_total(),
                     "taxes"        => $shipping_method->get_taxes(),
+                    "total"        => $total,
                 ] );
-
-                $metadata = $shipping_method->get_meta_data();
-
-                if ( $metadata )
-                    foreach ( $metadata as $meta )
-                        $item->add_meta_data( $meta->key, $meta->value );
 
                 $order->add_item( $item );
                 $order->set_shipping_total( $shipping_method->get_total() );
