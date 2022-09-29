@@ -219,7 +219,6 @@ class WC_Triibo_Fastshop_Orders
         $this->log( "TRIIBO: Creating sub order for hub: " . $hub );
 
         $bill_ship = [
-            "billing_cpf",
             "billing_country",
             "billing_first_name",
             "billing_last_name",
@@ -231,7 +230,6 @@ class WC_Triibo_Fastshop_Orders
             "billing_postcode",
             "billing_email",
             "billing_phone",
-            "shipping_cpf",
             "shipping_country",
             "shipping_first_name",
             "shipping_last_name",
